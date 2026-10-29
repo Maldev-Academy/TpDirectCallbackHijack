@@ -1,0 +1,52 @@
+TpDirectCallbackHijack
+Copyright 2026 MalDev Academy (@NUL0x4C | @mrd0x)
+
+This product is part of MalDev Academy's Windows internals and offensive
+security coursework.
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may
+not use this file except in compliance with the License. You may obtain
+a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+================================================================================
+
+Original research
+-----------------
+
+This project is an independent implementation inspired by Pool Party
+process injection research by Alon Leviev (SafeBreach Labs), presented
+at Black Hat EU 2023 under the title "The Pool Party You Will Never
+Forget: New Process Injection Techniques Using Windows Thread Pools."
+
+  - https://github.com/SafeBreach-Labs/PoolParty
+  - https://www.safebreach.com/blog/process-injection-using-windows-thread-pools/
+
+The TP_DIRECT.Callback hijack primitive, the TP_IO / TP_ALPC / TP_JOB
+object kinds, and the NtSetIoCompletion dispatch trigger all originate
+from the Pool Party research. The specific primitive implemented here
+(walking a victim's live TP_POOL.PoolObjectList, hijacking an existing
+pool object's embedded TP_DIRECT.Callback in place rather than inserting
+a new TP_<kind> structure, with a per-run restore stub) is not one of
+the eight originally published variants.
+
+Thread pool internal structure layouts (TP_POOL, TPP_CLEANUP_GROUP_MEMBER,
+TP_IO, TP_ALPC, TP_JOB, TP_DIRECT) were reconstructed from WinDbg "dt"
+output against ntdll shipped with Windows 10 and Windows 11 builds listed
+in InternalStructures.h.
+
+================================================================================
+
+Redistribution
+--------------
+
+Any redistribution, modification, or derivative work must retain the
+above copyright notice and this NOTICE file, as required by Section 4(d)
+of the Apache License, Version 2.0.
