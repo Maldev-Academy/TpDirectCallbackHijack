@@ -2,19 +2,33 @@
 
 Remote process injection PoC that triggers the shellcode by overwriting 8 bytes inside an existing thread pool object (the embedded `TP_DIRECT.Callback` field of a `TP_IO`, `TP_ALPC`, or `TP_JOB`) and dispatches the shellcode through the target's own pool worker.
 
+### Quick Links
+
+[Maldev Academy Home](https://maldevacademy.com?ref=gh)
+
+[Maldev Database](https://search.maldevacademy.com?ref=gh)
+  
+[Malware Development Course Syllabus](https://maldevacademy.com/maldev-course/syllabus?ref=gh)
+
+[Offensive Phishing Operations Course Syllabus](https://maldevacademy.com/phishing-course/syllabus?ref=gh)
+
+[Ransomware Internals, Simulation and Detection Course Syllabus](https://maldevacademy.com/ransomware-course/syllabus?ref=gh)
+
+<br>
+
 
 ## Overview
 
 A Windows thread pool worker in the target process spends most of its life parked inside [`ntdll!NtWaitForWorkViaWorkerFactory`](https://ntdoc.m417z.com/ntwaitforworkviaworkerfactory), blocked on the pool's internal I/O completion port (an [IoCompletion](https://learn.microsoft.com/en-us/windows/win32/fileio/i-o-completion-ports) handle). When another thread posts a completion packet to that port via [NtSetIoCompletion](https://ntdoc.m417z.com/ntsetiocompletion), the kernel wakes the worker and hands it the packet's [KeyContext](https://ntdoc.m417z.com/ntsetiocompletion) value. For pool-dispatched work, `KeyContext` points at a `_TP_DIRECT` descriptor. The worker reads the `_TP_DIRECT.Callback` field out of that descriptor and calls it, passing the descriptor itself as the first argument.
 
-That `Callback` field is a function pointer sitting in writable memory in the process. Overwriting it with a pointer to attacker controlled code and then posting a single completion packet with `KeyContext = &TP_DIRECT` makes the worker dispatch to the attacker's code, on the host's own thread, with a call stack that looks indistinguishable from a legitimate pool callback.
+That `Callback` field is a function pointer sitting in writable memory in the process. Overwriting it with a pointer to attacker-controlled code and then posting a single completion packet with `KeyContext = &TP_DIRECT` makes the worker dispatch to the attacker's code, on the host's own thread, with a call stack that looks indistinguishable from a legitimate pool callback.
 
 This repo covers target discovery, the pool walk, payload delivery, the Callback hijack, and a restore stub that puts the original function pointer back so the host's thread pool keeps working normally after the payload returns.
 
 
 ### What is `TP_DIRECT` ?
 
-`_TP_DIRECT` is an undocumented ntdll internal structure used by the Windows thread pool to describe one unit of callback dispatch. It is not exported, has no public header. Its layout was reverse-engineered and fetched from WinDbg's `dt ntdll!_TP_DIRECT`, which on Windows 11 24H2 (ntdll 10.0.26100.9711) looks like:
+`_TP_DIRECT` is an undocumented ntdll internal structure used by the Windows thread pool to describe one unit of callback dispatch. It is not exported and has no public header. Its layout was reverse-engineered and fetched from WinDbg's `dt ntdll!_TP_DIRECT`, which on Windows 11 24H2 (ntdll 10.0.26100.9711) looks like:
 
 ```
 0:004> dt ntdll!_TP_DIRECT
@@ -28,6 +42,7 @@ This repo covers target discovery, the pool walk, payload delivery, the Callback
 
 What matters here is `Callback` at `+0x38`, which represents the raw function pointer the pool dispatcher calls. The full structure definition used by this project lives in [InternalStructures.h](https://github.com/Maldev-Academy/TpDirectCallbackHijack/blob/main/TpDirectCallbackHijack/InternalStructures.h#L277-L285), derived from WinDbg output and verified across the Windows versions listed in [Supported Windows versions](#supported-windows-versions).
 
+<br>
 
 
 ## Technique
@@ -56,7 +71,7 @@ The hijack:
 | `TP_ALPC` | `+0x000`                     | `+0x038`                   |
 | `TP_JOB`  | `+0x000`                     | `+0x038`                   |
 
-The outer struct definitions for all three live in [InternalStructures.h](https://github.com/Maldev-Academy/TpDirectCallbackHijack/blob/main/TpDirectCallbackHijack/InternalStructures.h#L443-L493). They are identified at walk time by the per kind `TppXpCleanupGroupMemberVFuncs` pointer stored at `TPP_CLEANUP_GROUP_MEMBER.VFuncs`. The hardcoded RVAs for those tables live in [Common.h](https://github.com/Maldev-Academy/TpDirectCallbackHijack/blob/main/TpDirectCallbackHijack/Common.h#L56-L58) and are regenerated per ntdll build using the companion [`NtdllRvaCheck`](#ntdllrvacheck) utility.
+The outer struct definitions for all three live in [InternalStructures.h](https://github.com/Maldev-Academy/TpDirectCallbackHijack/blob/main/TpDirectCallbackHijack/InternalStructures.h#L443-L493). They are identified at walk time by the per-kind `TppXpCleanupGroupMemberVFuncs` pointer stored at `TPP_CLEANUP_GROUP_MEMBER.VFuncs`. The hardcoded RVAs for those tables live in [Common.h](https://github.com/Maldev-Academy/TpDirectCallbackHijack/blob/main/TpDirectCallbackHijack/Common.h#L56-L58) and are regenerated per ntdll build using the companion [`NtdllRvaCheck`](#ntdllrvacheck) utility.
 
 ### Restore stub
 
@@ -77,7 +92,9 @@ The restore stub reads only from fixed PE relative data slots inside its own pay
 
 The stub restores `TP_DIRECT.Callback` to its original value, then falls through into the user payload. The payload's final `ret` lands back in `ntdll!TppWorkerThread`'s dispatch loop and the thread re enters its wait.
 
-Both runtime dependent slots (the original callback value at `+0x00`, and the `&TP_DIRECT.Callback` imm64 at `+0x16`) are patched in by [`EmitRestoreStub`](https://github.com/Maldev-Academy/TpDirectCallbackHijack/blob/main/TpDirectCallbackHijack/Main.c#L186) before the buffer is written into the target.
+Both runtime-dependent slots (the original callback value at `+0x00`, and the `&TP_DIRECT.Callback` imm64 at `+0x16`) are patched in by [`EmitRestoreStub`](https://github.com/Maldev-Academy/TpDirectCallbackHijack/blob/main/TpDirectCallbackHijack/Main.c#L186) before the buffer is written into the target.
+
+<br>
 
 
 ## Target discovery
@@ -127,9 +144,9 @@ The RVA derivation could be merged into the main injector. Doing so would drag `
 This project currently uses only the three `*_CLEANUP_GROUP_MEMBER_VFUNCS_RVA` values. The `*_EXECUTE_CALLBACK_RVA` lines are the per kind dispatch entries (`ntdll!TppIopExecuteCallback` etc.) and are printed alongside in case future variants want to hook at that level instead.
 
 
-### WinDbg cross check
+### WinDbg cross-check
 
-The same RVAs can be derived manually under a debugger:
+The same RVAs can be derived manually via WinDbg:
 
 ```
 0:004> ? ntdll!TppIopCleanupGroupMemberVFuncs    - ntdll
@@ -162,13 +179,14 @@ The `TppXp*VFuncs` RVAs in `Common.h` are specific to 10.0.26100.9711 as shipped
 
 ![TpDirectCallbackHijack sample run](Images/cmd.png)
 
+<br>
 
 
 ## Known limitations
 
-**Hardcoded ntdll RVAs.** `Common.h` ships with values for Windows 11 24H2 build 10.0.26100.9711. Any other ntdll build requires regenerating via `NtdllRvaCheck` on that build. The internal struct offsets in `InternalStructures.h` have been verified across all Windows versions listed above and have not shifted; the `TppXp*VFuncs` RVAs do shift between builds.
+* **Hardcoded ntdll RVAs.** `Common.h` ships with values for Windows 11 24H2 build 10.0.26100.9711. Any other ntdll build requires regenerating via `NtdllRvaCheck` on that build. The internal struct offsets in `InternalStructures.h` have been verified across all Windows versions listed above and have not shifted; the `TppXp*VFuncs` RVAs do shift between builds.
 
-**Non TPP `WrQueue` threads.** `WaitReason=WrQueue` matches any thread blocked on a `KQUEUE`, which includes .NET `PortableThreadPool.IOCompletionPoller` threads, libuv's IOCP backend, custom thread pools, server frameworks, and anything else sitting in [`GetQueuedCompletionStatus`](https://learn.microsoft.com/en-us/windows/win32/api/ioapiset/nf-ioapiset-getqueuedcompletionstatus) / [`GetQueuedCompletionStatusEx`](https://learn.microsoft.com/en-us/windows/win32/fileio/getqueuedcompletionstatusex-func). The scanner uses `WrQueue` only as a cheap proxy for "this process touches IOCP"; the real filtering happens through the `TpWorkerFactory` to `TP_POOL` to pool object chain, which rejects anything that is not a genuine Win32 thread pool.
+* **Non-TPP `WrQueue` threads.** `WaitReason=WrQueue` matches any thread blocked on a `KQUEUE`, which includes .NET `PortableThreadPool.IOCompletionPoller` threads, libuv's IOCP backend, custom thread pools, server frameworks, and anything else sitting in [`GetQueuedCompletionStatus`](https://learn.microsoft.com/en-us/windows/win32/api/ioapiset/nf-ioapiset-getqueuedcompletionstatus) / [`GetQueuedCompletionStatusEx`](https://learn.microsoft.com/en-us/windows/win32/fileio/getqueuedcompletionstatusex-func). The scanner uses `WrQueue` only as a cheap proxy for "this process touches IOCP"; the real filtering happens through the `TpWorkerFactory` to `TP_POOL` to pool object chain, which rejects anything that is not a genuine Win32 thread pool.
 
 ## Acknowledgements
 
