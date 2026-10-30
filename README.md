@@ -16,7 +16,6 @@ Remote process injection PoC that triggers the shellcode by overwriting 8 bytes 
 
 <br>
 
-
 ## Overview
 
 A Windows thread pool worker in the target process spends most of its life parked inside [`ntdll!NtWaitForWorkViaWorkerFactory`](https://ntdoc.m417z.com/ntwaitforworkviaworkerfactory), blocked on the pool's internal I/O completion port (an [IoCompletion](https://learn.microsoft.com/en-us/windows/win32/fileio/i-o-completion-ports) handle). When another thread posts a completion packet to that port via [NtSetIoCompletion](https://ntdoc.m417z.com/ntsetiocompletion), the kernel wakes the worker and hands it the packet's [KeyContext](https://ntdoc.m417z.com/ntsetiocompletion) value. For pool-dispatched work, `KeyContext` points at a `_TP_DIRECT` descriptor. The worker reads the `_TP_DIRECT.Callback` field out of that descriptor and calls it, passing the descriptor itself as the first argument.
@@ -90,7 +89,7 @@ The restore stub reads only from fixed PE relative data slots inside its own pay
 [+0x23]        (payload falls through here)
 ```
 
-The stub restores `TP_DIRECT.Callback` to its original value, then falls through into the user payload. The payload's final `ret` lands back in `ntdll!TppWorkerThread`'s dispatch loop and the thread re enters its wait.
+The stub restores `TP_DIRECT.Callback` to its original value, then falls through into the user payload. The payload's final `ret` lands back in `ntdll!TppWorkerThread`'s dispatch loop, and the thread re-enters its wait.
 
 Both runtime-dependent slots (the original callback value at `+0x00`, and the `&TP_DIRECT.Callback` imm64 at `+0x16`) are patched in by [`EmitRestoreStub`](https://github.com/Maldev-Academy/TpDirectCallbackHijack/blob/main/TpDirectCallbackHijack/Main.c#L186) before the buffer is written into the target.
 
@@ -118,7 +117,7 @@ Standalone probe utility. Creates throwaway local `TP_IO`, `TP_ALPC`, and `TP_JO
 
 ### Why it is a separate binary
 
-The pool walker in [Main.c](https://github.com/Maldev-Academy/TpDirectCallbackHijack/blob/main/TpDirectCallbackHijack/Main.c#L356) needs to identify what kind of pool object each `_TPP_CLEANUP_GROUP_MEMBER` sits inside. It does this by matching `CleanupGroupMember.VFuncs` against three per kind tables inside ntdll:
+The pool walker in [Main.c](https://github.com/Maldev-Academy/TpDirectCallbackHijack/blob/main/TpDirectCallbackHijack/Main.c#L356) needs to identify what kind of pool object each `_TPP_CLEANUP_GROUP_MEMBER` sits inside. It does this by matching `CleanupGroupMember.VFuncs` against three per-kind tables inside ntdll:
 
 * `ntdll!TppIopCleanupGroupMemberVFuncs`
 * `ntdll!TppAlpcpCleanupGroupMemberVFuncs`
@@ -154,7 +153,7 @@ The RVA derivation could be merged into the main injector. Doing so would drag `
 #define TPP_JOBP_EXECUTE_CALLBACK_RVA               0x0C1F10
 ```
 
-This project currently uses only the three `*_CLEANUP_GROUP_MEMBER_VFUNCS_RVA` values. The `*_EXECUTE_CALLBACK_RVA` lines are the per kind dispatch entries (`ntdll!TppIopExecuteCallback` etc.) and are printed alongside in case future variants want to hook at that level instead.
+This project currently uses only the three `*_CLEANUP_GROUP_MEMBER_VFUNCS_RVA` values. The `*_EXECUTE_CALLBACK_RVA` lines are the per-kind dispatch entries (`ntdll!TppIopExecuteCallback` etc.) and are printed alongside for completeness. 
 
 
 ### WinDbg cross-check
@@ -207,4 +206,4 @@ Builds on [SafeBreach Labs' Pool Party research](https://github.com/SafeBreach-L
 
 * Object kinds (`TP_IO` / `TP_ALPC` / `TP_JOB`) from variants 4, 5, 6.
 * The `_TP_DIRECT.Callback` dispatch primitive from variant 7.
-* [`NtSetIoCompletion`](https://ntdoc.m417z.com/ntsetiocompletion) as the trigger (variant 4 style, not variant 7's [`NtSetIoCompletionEx`](https://ntdoc.m417z.com/ntsetiocompletionex)).
+* [`NtSetIoCompletion`](https://ntdoc.m417z.com/ntsetiocompletion) as the trigger from variant 4.
