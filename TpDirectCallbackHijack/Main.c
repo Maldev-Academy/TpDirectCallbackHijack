@@ -1,6 +1,8 @@
 // Copyright 2026 MalDev Academy
-// TpDirectCallbackHijack - Hijacks the embedded TP_DIRECT.Callback of a live 
-// TP_IO / TP_ALPC / TP_JOB in a remote process to execute shellcode.
+// TpDirectCallbackHijack - Licensed under the Apache License, Version 2.0 (the "License")
+// https://github.com/Maldev-Academy/TpDirectCallbackHijack
+// 
+// Hijacks the embedded TP_DIRECT.Callback of a live TP_IO / TP_ALPC / TP_JOB in a remote process to execute shellcode.
 //
 // Based on SafeBreach Labs' Pool Party research
 //   Alon Leviev, Black Hat EU 2023

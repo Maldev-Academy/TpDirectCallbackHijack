@@ -1,6 +1,6 @@
 // Copyright 2026 MalDev Academy
-// WhisperHijack2 - Licensed under the Apache License, Version 2.0 (the "License")
-// https://github.com/Maldev-Academy/WhisperHijack2
+// TpDirectCallbackHijack - Licensed under the Apache License, Version 2.0 (the "License")
+// https://github.com/Maldev-Academy/TpDirectCallbackHijack
 
 #include "DbgMacros.h"
 

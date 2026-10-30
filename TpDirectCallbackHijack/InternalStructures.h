@@ -1,3 +1,7 @@
+// Copyright 2026 MalDev Academy
+// TpDirectCallbackHijack - Licensed under the Apache License, Version 2.0 (the "License")
+// https://github.com/Maldev-Academy/TpDirectCallbackHijack
+
 
 /*
 * All Data Types Below Are Fetched From Windows build 10.0.26100.9711 (Windows 11 24H2) 

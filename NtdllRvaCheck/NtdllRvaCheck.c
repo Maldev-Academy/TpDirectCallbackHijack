@@ -1,8 +1,12 @@
-// Creates throwaway local TP_IO, TP_ALPC, and TP_JOB objects in this process; reads the
+// Copyright 2026 MalDev Academy
+// TpDirectCallbackHijack - Licensed under the Apache License, Version 2.0 (the "License")
+// https://github.com/Maldev-Academy/TpDirectCallbackHijack
+// 
+// NtdllRvaCheck - Creates throwaway local TP_IO, TP_ALPC, and TP_JOB objects in this process; reads the
 // VFuncs / Direct.Callback pointers out of each live object; subtracts ntdll's module base;
-// and prints the full set of RVAs used by WhisperHijack2's pool walker.
+// and prints the full set of RVAs used by TpDirectCallbackHijack's pool walker.
 //
-// This logic can be merged with WhisperHijack2 so that it doesn't rely on hardcoded RVA
+// This logic can be merged with TpDirectCallbackHijack so that it doesn't rely on hardcoded RVA
 // constants. However it is separated to keep the injector binary lean, with no named-pipe
 // IoC, no ntdll internal-API imports, and no CreateNamedPipeW / CreateThreadpoolIo /
 // NtAlpcCreatePort / TpAllocAlpcCompletion / TpAllocJobNotification exports in the

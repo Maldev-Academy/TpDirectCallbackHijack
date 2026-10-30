@@ -124,6 +124,19 @@ The RVA derivation could be merged into the main injector. Doing so would drag `
 #define TPP_JOBP_EXECUTE_CALLBACK_RVA               0x0BF5F0
 ```
 
+### Sample output (Windows 11 24H2, build 10.0.26300.9818)
+
+```
+#define TPP_IOP_CLEANUP_GROUP_MEMBER_VFUNCS_RVA     0x178BE8
+#define TPP_IOP_EXECUTE_CALLBACK_RVA                0x077790
+
+#define TPP_ALPCP_CLEANUP_GROUP_MEMBER_VFUNCS_RVA   0x178DD0
+#define TPP_ALPCP_EXECUTE_CALLBACK_RVA              0x024150
+
+#define TPP_JOBP_CLEANUP_GROUP_MEMBER_VFUNCS_RVA    0x178C08
+#define TPP_JOBP_EXECUTE_CALLBACK_RVA               0x0C1F10
+```
+
 This project currently uses only the three `*_CLEANUP_GROUP_MEMBER_VFUNCS_RVA` values. The `*_EXECUTE_CALLBACK_RVA` lines are the per kind dispatch entries (`ntdll!TppIopExecuteCallback` etc.) and are printed alongside in case future variants want to hook at that level instead.
 
 
